@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>4×6 Multi-Label Maker</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <style>
+    * { box-sizing: border-box; margin:0; padding:0; }
+    body {
+      background:#f5f7fa;
+      color:#2c3e50;
+      font-family:'Segoe UI', Tahoma, sans-serif;
+      padding:1em;
+    }
+    .container {
+      max-width:480px; margin:1.5em auto;
+      background:#fff; padding:1.5em;
+      border-radius:8px; box-shadow:0 2px 10px rgba(0,0,0,0.1);
+    }
+    h2 { text-align:center; margin-bottom:1em; color:#34495e; font-weight:600; }
+    label { display:block; margin-top:1em; font-weight:500; font-size:0.95em; }
+    textarea, input[type="number"] {
+      width:100%; margin-top:0.5em; padding:0.75em;
+      border:1px solid #ccd1d9; border-radius:4px;
+      font-family:monospace; font-size:0.95em; resize:vertical;
+    }
+    button {
+      margin-top:1em; padding:0.75em 1em; font-size:0.95em;
+      font-weight:500; color:#fff; background:#3498db;
+      border:none; border-radius:4px; cursor:pointer;
+      transition:background 0.2s;
+    }
+    button:hover { background:#2980b9; }
+    ul#recList { list-style:none; margin-top:1em; }
+    ul#recList li {
+      position:relative; background:#ecf0f1;
+      border:1px solid #d0d7de; border-radius:4px;
+      padding:0.75em 2.5em 0.75em 0.75em;
+      margin-bottom:0.5em; font-size:0.93em;
+    }
+    .controls {
+      position:absolute; top:0.5em; right:0.5em;
+    }
+    .controls button {
+      background:none; border:none; font-size:1.1em;
+      margin-left:0.5em; color:#7f8c8d; cursor:pointer;
+      transition:color 0.2s;
+    }
+    .controls button:hover { color:#c0392b; }
+    @media(max-width:480px) {
+      .container { margin:1em; padding:1em; }
+      button { width:100%; }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h2>4×6 Multi-Label Maker</h2>
+
+    <label for="return">Return Address (one-time)</label>
+    <textarea id="return" rows="3" placeholder="Enter &amp; Save your return address…"></textarea>
+    <button id="saveReturn">Save Return Address</button>
+
+    <label for="newRec">New Recipient Address</label>
+    <textarea id="newRec" rows="5" placeholder="Paste one recipient address…"></textarea>
+    <button id="addRec">Add Recipient</button>
+
+    <h3 style="margin-top:1.5em;">Recipients</h3>
+    <ul id="recList"></ul>
+
+    <button id="printLabels" style="background:#27ae60;">
+      Print All Labels
+    </button>
+  </div>
+
+  <script>
+  (function(){
+    const { jsPDF } = window.jspdf;
+
+    // Elements
+    const retTa    = document.getElementById('return'),
+          saveBtn  = document.getElementById('saveReturn'),
+          newTa    = document.getElementById('newRec'),
+          addBtn   = document.getElementById('addRec'),
+          recList  = document.getElementById('recList'),
+          printBtn = document.getElementById('printLabels');
+
+    // Persist return address only
+    const storedRet = localStorage.getItem('label_return');
+    if (storedRet) retTa.value = storedRet;
+    saveBtn.onclick = ()=>{
+      const v = retTa.value.trim();
+      if (!v) return alert('Return address cannot be empty.');
+      localStorage.setItem('label_return', v);
+      alert('Return address saved.');
+    };
+
+    // Recipients array only in memory
+    let recs = [];
+
+    function renderRecs(){
+      recList.innerHTML = '';
+      recs.forEach((lines,i)=>{
+        const li = document.createElement('li');
+        li.innerHTML = lines.map(l=>`<div>${l}</div>`).join('');
+        const ctr = document.createElement('div'); ctr.className='controls';
+        const edit = document.createElement('button'); edit.textContent='✎'; edit.title='Edit';
+        edit.onclick = ()=>{
+          newTa.value = lines.join('\n');
+          addBtn.textContent = 'Save Edit';
+          addBtn.dataset.editing = i;
+        };
+        const del = document.createElement('button'); del.textContent='✕'; del.title='Delete';
+        del.onclick = ()=>{
+          if(confirm('Delete this address?')){
+            recs.splice(i,1);
+            renderRecs();
+          }
+        };
+        ctr.append(edit,del); li.appendChild(ctr); recList.appendChild(li);
+      });
+    }
+
+    addBtn.onclick = ()=>{
+      const t = newTa.value.trim();
+      if (!t) return alert('Enter recipient address.');
+      const lines = t.split('\n').map(l=>l.trim()).filter(Boolean);
+      if (addBtn.dataset.editing != null){
+        recs[addBtn.dataset.editing] = lines;
+        delete addBtn.dataset.editing;
+        addBtn.textContent = 'Add Recipient';
+      } else {
+        recs.push(lines);
+      }
+      newTa.value = '';
+      renderRecs();
+    };
+
+    // PDF gen (landscape 6×4) with perfect centering
+    printBtn.onclick = ()=>{
+      const ret = (localStorage.getItem('label_return')||'')
+                    .split('\n').map(l=>l.trim()).filter(Boolean);
+      if (!ret.length) return alert('Save a return address first.');
+      if (!recs.length) return alert('Add at least one recipient.');
+
+      const pageW = 6, pageH = 4;
+      const doc = new jsPDF({ unit:'in', format:[pageW,pageH], orientation:'landscape' });
+
+      const margin    = 0.2,
+            size10    = 10/72,
+            size14    = 14/72,
+            leading10 = size10*1.2,
+            leading14 = size14*1.2,
+            cutYBot   = 0.75;
+
+      recs.forEach((rc,i)=>{
+        if (i>0) doc.addPage();
+
+        // Return address
+        doc.setFontSize(10);
+        let y_ret = margin + size10;
+        ret.forEach(line=>{
+          doc.text(line, margin, y_ret);
+          y_ret += leading10;
+        });
+
+        // Recipient centered
+        doc.setFontSize(14);
+        const totalH = rc.length * leading14;
+        let y_rec = (pageH - totalH)/2 + size14;
+        rc.forEach(line=>{
+          const tw = doc.getTextWidth(line);
+          const x  = (pageW - tw)/2;
+          doc.text(line, x, y_rec);
+          y_rec += leading14;
+        });
+
+        // Cut line
+        const y_cut = pageH - cutYBot;
+        doc.setLineWidth(0.01);
+        doc.line(margin, y_cut, pageW - margin, y_cut);
+      });
+
+      doc.save('labels.pdf');
+    };
+
+    // Initialize
+    renderRecs();
+  })();
+  </script>
+</body>
+</html>

@@ -198,9 +198,9 @@
 
       const margin    = 0.2,
             size10    = 10/72,
-            size14    = 14/72,
+            size12    = 12/72,
             leading10 = size10 * 1.2,
-            leading14 = size14 * 1.2,
+            leading12 = size12 * 1.05,
             cutYBot   = 0.50;
 
       recs.forEach((rc, i) => {
@@ -215,17 +215,17 @@
         });
 
         // 2) Recipient block horizontally centered, lines left-aligned
-        doc.setFontSize(14);
-        const totalH = rc.length * leading14;
+        doc.setFontSize(12);
+        const totalH = rc.length * leading12;
         // find widest line (in inches)
         const maxW = rc.reduce((w, line) => Math.max(w, doc.getTextWidth(line)), 0);
         // left edge of block
         const x0 = (pageW - maxW) / 2;
         // vertical centering
-        let y_rec = (pageH - totalH) / 2 + size14;
+        let y_rec = (pageH - totalH) / 2 + size12;
         rc.forEach(line => {
           doc.text(line, x0, y_rec);
-          y_rec += leading14;
+          y_rec += leading12;
         });
 
         // 3) Cut-guide line
